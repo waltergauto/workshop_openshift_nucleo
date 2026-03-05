@@ -1,7 +1,6 @@
 ---
-// Página principal con formulario para consultar la API
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8080';
 ---
-
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -75,21 +74,20 @@
   <body>
     <div class="container">
       <h1>Consultar API Quarkus</h1>
-      
+      <div id="config" data-api-url={apiUrl} style="display:none"></div>
       <form id="apiForm">
-        <input 
-          type="text" 
-          id="nameInput" 
-          placeholder="Introduce un nombre" 
-          required 
+        <input
+          type="text"
+          id="nameInput"
+          placeholder="Introduce un nombre"
+          required
         />
         <button type="submit" id="submitBtn">Enviar</button>
       </form>
-      
       <div id="result"></div>
     </div>
-
     <script>
+      const apiUrl = document.getElementById('config').dataset.apiUrl;
       const form = document.getElementById('apiForm');
       const nameInput = document.getElementById('nameInput');
       const resultDiv = document.getElementById('result');
@@ -97,7 +95,6 @@
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const name = nameInput.value.trim();
         if (!name) return;
 
@@ -109,20 +106,14 @@
         resultDiv.style.display = 'block';
 
         try {
-          // Llamada a tu API
-          const response = await fetch(`http://localhost:8080/api/greet?name=${encodeURIComponent(name)}`);
-          
+          const response = await fetch(`${apiUrl}/api/greet?name=${encodeURIComponent(name)}`);
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-          
           const data = await response.json();
-          
-          // Mostrar resultado
           resultDiv.textContent = JSON.stringify(data, null, 2);
           resultDiv.classList.remove('loading');
           resultDiv.classList.add('success');
-          
         } catch (error) {
           resultDiv.textContent = `Error: ${error.message}`;
           resultDiv.classList.remove('loading');

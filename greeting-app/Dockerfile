@@ -9,6 +9,9 @@ RUN npm install
 COPY . .
 RUN npm run build
 
+ARG PUBLIC_API_URL=http://localhost:8080
+ENV PUBLIC_API_URL=$PUBLIC_API_URL
+
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM nginx:alpine
 
