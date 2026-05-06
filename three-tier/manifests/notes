@@ -1,0 +1,4 @@
+#!/bin/bash
+POD_NAME=postgres-6798ccb658-rp7nh
+oc cp init.sql $POD_NAME:/tmp
+oc exec -it $POD_NAME -- psql -U workshop -d productsdb -f /tmp/init.sql

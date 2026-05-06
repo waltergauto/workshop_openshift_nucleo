@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-spring
+  labels:
+    app: simple-spring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-spring
+  template:
+    metadata:
+      labels:
+        app: simple-spring
+    spec:
+      containers:
+      - name: simple-spring
+        image: default-route-openshift-image-registry.apps.ocpgiyu.lab.data.com.py/app/simple-spring:v1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

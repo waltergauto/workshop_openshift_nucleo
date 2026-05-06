@@ -1,0 +1,102 @@
+---
+# ConfigMap — configuración no sensible
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  DB_HOST: postgres-service
+  DB_PORT: "5432"
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: quay-wgauto.lab.data.com.py/devops_and_cloud/products-backend:v1
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          env:
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRESQL_DATABASE
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRESQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRESQL_PASSWORD
+          resources: {}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 50
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: products-backend
+  labels:
+    app: products-backend
+spec:
+  selector:
+    app: products-backend
+  ports:
+    - port: 8081
+      targetPort: 8081
+
+---
+# Route (OpenShift)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: backend-route
+spec:
+  to:
+    kind: Service
+    name: products-backend
+  port:
+    targetPort: 8081
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

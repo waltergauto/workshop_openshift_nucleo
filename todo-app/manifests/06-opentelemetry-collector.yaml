@@ -1,0 +1,45 @@
+---
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-collector
+  namespace: todo
+spec:
+  mode: deployment
+  service:
+    name: otel-collector
+    ports:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+    exporters:
+      otlp:
+        endpoint: todo-tempo-gateway.todo.svc:8090
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp]
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"

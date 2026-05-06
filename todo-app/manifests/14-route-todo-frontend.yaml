@@ -1,0 +1,14 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: todo-frontend
+  namespace: todo
+spec:
+  to:
+    kind: Service
+    name: todo-frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge

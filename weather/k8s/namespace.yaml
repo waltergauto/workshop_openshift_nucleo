@@ -1,0 +1,14 @@
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: weather-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: weather-edit
+subjects:
+  - kind: ServiceAccount
+    name: default
+roleRef:
+  name: edit

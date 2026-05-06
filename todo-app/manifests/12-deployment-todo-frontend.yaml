@@ -1,0 +1,51 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-frontend
+  namespace: todo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todo-frontend
+  template:
+    metadata:
+      labels:
+        app: todo-frontend
+    spec:
+      containers:
+        - name: todo-frontend
+          image: default-route-openshift-image-registry.apps.ocpgiyu.lab.data.com.py/todo/todo-frontend:v1
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: BACKEND_URL
+              value: http://todo-backend:8080
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_SERVICE_NAME
+              value: todo-frontend
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5

@@ -1,0 +1,14 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tempo-query
+  namespace: todo
+spec:
+  to:
+    kind: Service
+    name: todo-tempo-query-frontend
+  port:
+    targetPort: 3200
+  tls:
+    termination: edge

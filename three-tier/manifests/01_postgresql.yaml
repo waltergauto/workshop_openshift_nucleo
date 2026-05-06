@@ -1,0 +1,109 @@
+---
+# Secret — credenciales de base de datos (nombres requeridos por la imagen UBI)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+stringData:
+  POSTGRESQL_DATABASE: productsdb
+  POSTGRESQL_USER:     workshop
+  POSTGRESQL_PASSWORD: workshop123
+
+---
+# PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-client
+
+---
+# ConfigMap — script de inicialización
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS products (
+        id          SERIAL PRIMARY KEY,
+        name        VARCHAR(100) NOT NULL,
+        description TEXT,
+        price       NUMERIC(10,2) NOT NULL,
+        stock       INTEGER DEFAULT 0
+    );
+    INSERT INTO products (name, description, price, stock) VALUES
+        ('Laptop Pro 15',     'Laptop de alto rendimiento con 32GB RAM',      1299.99, 15),
+        ('Monitor UltraWide', 'Monitor 34" curvo 144Hz',                       699.99, 30),
+        ('Teclado Mecánico',  'Teclado mecánico con switches Cherry MX Red',    89.99, 50),
+        ('Mouse Ergonómico',  'Mouse inalámbrico con 6 botones programables',   49.99, 80),
+        ('Webcam 4K',         'Cámara web con enfoque automático y micrófono', 129.99, 25),
+        ('Hub USB-C',         'Hub 7 puertos con carga rápida PD 100W',         59.99, 40);
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: registry.redhat.io/rhel9/postgresql-15:9.7
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+            - name: initdb
+              mountPath: /opt/app-root/src/postgresql-start
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: initdb
+          configMap:
+            name: postgres-initdb
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
