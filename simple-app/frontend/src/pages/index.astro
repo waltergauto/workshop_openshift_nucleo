@@ -1,0 +1,97 @@
+---
+const backendUrl = "http://localhost:8080"
+let empleados = []
+let mensaje = ""
+
+try {
+  const [empleadosRes, mensajeRes] = await Promise.all([
+    fetch(`${backendUrl}/api/v1/empleados`),
+    fetch(`${backendUrl}/api/v1/hello`)
+  ])
+
+  if (empleadosRes.ok) {
+    empleados = await empleadosRes.json()
+  }
+
+  if (mensajeRes.ok) {
+    const data = await mensajeRes.json()
+    mensaje = data.message || ""
+  }
+} catch (error) {
+  console.error("Error fetching data:", error)
+}
+---
+
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Frontend Astro + Backend Quarkus</title>
+		<style>
+			body {
+				font-family: system-ui, sans-serif;
+				max-width: 800px;
+				margin: 2rem auto;
+				padding: 0 1rem;
+			}
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 1rem 0;
+			}
+			th, td {
+				border: 1px solid #ddd;
+				padding: 8px;
+				text-align: left;
+			}
+			th {
+				background-color: #f2f2f2;
+			}
+			.message {
+				background: #e3f2fd;
+				padding: 1rem;
+				border-radius: 4px;
+				margin: 1rem 0;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Frontend con Astro</h1>
+
+		{mensaje && (
+			<div class="message">
+				<strong>Mensaje del backend:</strong> {mensaje}
+			</div>
+		)}
+
+		<h2>Lista de Empleados</h2>
+		{empleados.length > 0 ? (
+			<table>
+				<thead>
+					<tr>
+						<th>Nombre</th>
+						<th>Puesto</th>
+						<th>Salario</th>
+					</tr>
+				</thead>
+				<tbody>
+					{empleados.map((emp) => (
+						<tr>
+							<td>{emp.nombre}</td>
+							<td>{emp.puesto}</td>
+							<td>${emp.salario?.toFixed(2)}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		) : (
+			<p>No se pudieron cargar los empleados. Asegúrate de que el backend esté corriendo en http://localhost:8080</p>
+		)}
+
+		<hr />
+		<p><small>Backend: Quarkus en puerto 8080 | Frontend: Astro en puerto 4321</small></p>
+	</body>
+</html>
