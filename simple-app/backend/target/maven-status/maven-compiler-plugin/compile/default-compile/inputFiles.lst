@@ -1,0 +1,5 @@
+/root/workshop_openshift_development/workshop_openshift_nucleo/astro/backend/src/main/java/com/example/backend/Empleado.java
+/root/workshop_openshift_development/workshop_openshift_nucleo/astro/backend/src/main/java/com/example/backend/EmpleadoResource.java
+/root/workshop_openshift_development/workshop_openshift_nucleo/astro/backend/src/main/java/com/example/backend/GreetingResource.java
+/root/workshop_openshift_development/workshop_openshift_nucleo/astro/backend/src/main/java/com/example/backend/LivenessCheck.java
+/root/workshop_openshift_development/workshop_openshift_nucleo/astro/backend/src/main/java/com/example/backend/ReadinessCheck.java

@@ -1,0 +1,5 @@
+com/example/backend/ReadinessCheck.class
+com/example/backend/GreetingResource.class
+com/example/backend/Empleado.class
+com/example/backend/LivenessCheck.class
+com/example/backend/EmpleadoResource.class
