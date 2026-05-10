@@ -1,0 +1,7 @@
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/dto/CreateTodoRequest.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/dto/TodoResponse.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/dto/UpdateTodoRequest.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/entity/Todo.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/entity/TodoStatus.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/repository/TodoRepository.java
+/home/wgauto/projects/dev/quarkus/todo/backend/src/main/java/org/todo/resource/TodoResource.java

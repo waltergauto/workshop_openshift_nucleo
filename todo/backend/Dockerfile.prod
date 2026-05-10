@@ -1,0 +1,17 @@
+FROM docker.io/library/eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+COPY target/quarkus-app/lib/ ./lib/
+COPY target/quarkus-app/*.jar ./
+COPY target/quarkus-app/app/ ./app/
+COPY target/quarkus-app/quarkus/ ./quarkus/
+
+ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV QUARKUS_DATASOURCE_URL="postgresql://${DB_HOST}:5432/${DB_NAME}"
+ENV QUARKUS_DATASOURCE_USERNAME="${DB_USER}"
+ENV QUARKUS_DATASOURCE_PASSWORD="${DB_PASSWORD}"
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "/app/quarkus-run.jar"]

@@ -1,0 +1,25 @@
+http:
+  routers:
+    frontend:
+      rule: "PathPrefix(`/`)"
+      service: frontend
+      entryPoints:
+        - web
+
+    backend:
+      rule: "PathPrefix(`/todos`)"
+      service: backend
+      entryPoints:
+        - web
+      priority: 10
+
+  services:
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://todo-frontend:80"
+
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://todo-backend:8080"

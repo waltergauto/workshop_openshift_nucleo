@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: todo-postgres
+    environment:
+      POSTGRES_DB: todo
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - todo-network
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: todo-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: todo
+      DB_USER: todo
+      DB_PASSWORD: todo
+      QUARKUS_DATASOURCE_URL: postgresql://postgres:5432/todo
+      QUARKUS_DATASOURCE_USERNAME: todo
+      QUARKUS_DATASOURCE_PASSWORD: todo
+      QUARKUS_PROFILE: prod
+      QUARKUS_OTEL_ENABLED: "true"
+      QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4317
+      QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: grpc
+      QUARKUS_OTEL_SERVICE_NAME: todo-backend
+      QUARKUS_OTEL_TRACES_SAMPLER: parentbased_always_on
+    networks:
+      - todo-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/q/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  jaeger:
+    image: docker.io/jaegertracing/all-in-one:1.57
+    container_name: todo-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: memory
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - todo-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: todo-frontend
+    networks:
+      - todo-network
+    restart: unless-stopped
+
+  proxy:
+    image: localhost/nginx-proxy:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: todo-proxy
+    ports:
+      - "8080:80"
+    networks:
+      - todo-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+networks:
+  todo-network:
+    name: todo-network
+
+volumes:
+  postgres_data:
+    name: todo-postgres-data
