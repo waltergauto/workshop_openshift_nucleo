@@ -1,0 +1,24 @@
+### Create project
+mvn io.quarkus.platform:quarkus-maven-plugin:3.15.1:create -DprojectGroupId=org.acme -DprojectArtifactId=quarkus-in-action -Dextensions="quarkus-rest"
+
+### Pre Step: Install wrapper
+mvn wrapper:wrapper
+
+### Start Quarkus application in Dev Mode
+./mvnw quarkus:dev
+
+### Build
+./mvnw package
+
+### Build with Quarkus CLI
+quarkus build
+
+### Run compiled application
+java -jar target/quarkus-app/quarkus-run.jar
+
+### Build native-image
+./mvnw package -Pnative
+./target/quarkus-in-action-1.0.0-SNAPSHOT-runner
+
+### Build with Docker or Podman
+./mvnw package -Pnative -Dquarkus.native.container-build=true

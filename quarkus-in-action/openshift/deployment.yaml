@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarkus
+  namespace: kuard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quarkus
+  template:
+    metadata:
+      labels:
+        app: quarkus
+    spec:
+      containers:
+      - name: quarkus
+        image: default-route-openshift-image-registry.apps.cluster-8tsrm.dynamic.redhatworkshops.io/kuard/quarkus:v1
+        ports:
+        - containerPort: 8080
