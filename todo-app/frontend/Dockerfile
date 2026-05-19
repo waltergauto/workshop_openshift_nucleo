@@ -11,7 +11,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package*.json ./
 ENV NODE_ENV=production
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo-collector-collector:4317
 ENV OTEL_SERVICE_NAME=todo-frontend
 
 EXPOSE 3000

@@ -9,6 +9,6 @@ spec:
     kind: Service
     name: todo-frontend
   port:
-    targetPort: http
+    targetPort: 3000
   tls:
     termination: edge

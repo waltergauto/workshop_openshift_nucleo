@@ -1,0 +1,20 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: feelings-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:5000
+    container_name: feelings-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend

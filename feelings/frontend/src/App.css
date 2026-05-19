@@ -1,0 +1,141 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+h1 {
+  font-size: 28px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #666;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+textarea {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: #667eea;
+}
+
+button {
+  margin-top: 16px;
+  padding: 12px 32px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 16px;
+  padding: 12px;
+  background: #ffeaea;
+  color: #d32f2f;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.result {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 10px;
+  border: 2px solid;
+}
+
+.result.positive {
+  border-color: #4caf50;
+  background: #e8f5e9;
+}
+
+.result.negative {
+  border-color: #f44336;
+  background: #ffebee;
+}
+
+.sentiment-badge {
+  display: inline-block;
+  padding: 6px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.positive .sentiment-badge {
+  background: #4caf50;
+  color: white;
+}
+
+.negative .sentiment-badge {
+  background: #f44336;
+  color: white;
+}
+
+.result-text {
+  font-style: italic;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.service-info {
+  font-size: 12px;
+  color: #999;
+}
+
+.service-info code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}

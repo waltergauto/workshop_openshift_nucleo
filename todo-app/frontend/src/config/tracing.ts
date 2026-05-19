@@ -6,7 +6,7 @@ import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions'
 import { diag, DiagConsoleLogger } from '@opentelemetry/api';
 
 const serviceName = process.env.OTEL_SERVICE_NAME || 'todo-frontend';
-const otelEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4317';
+const otelEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://tempo-collector-collector:4317';
 
 diag.setLogger(new DiagConsoleLogger());
 
