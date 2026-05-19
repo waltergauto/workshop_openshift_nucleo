@@ -1,12 +1,19 @@
 # Stage 1: Build the Quarkus application using your existing Maven image
-FROM localhost/openjdk-21-devel:v1 AS build
+#FROM registry.acces.redhat.com/openjdk-21-devel:v1 AS build
+FROM registry.access.redhat.com/ubi8/openjdk-21:1.23-4.1778751353 AS build
+
+USER root
 
 # Set the working directory inside the container
 WORKDIR /app
 
+RUN chown -R 185:0 /app && chmod -R g+rwX /app
+
+USER 185
+
 # Copy the project's pom.xml and download dependencies
 # This step helps leverage Docker layer caching
-COPY pom.xml .
+COPY --chown=185:0 pom.xml .
 RUN mvn dependency:go-offline -B
 
 # Copy the rest of the source code
@@ -16,7 +23,7 @@ COPY src/ src/
 # -Pprod activates the 'prod' profile if defined in your pom.xml
 # -Dquarkus.package.type=fast-jar creates an optimized JAR structure
 # -DskipTests skips running tests during the build
-RUN mvn package -Pprod -Dquarkus.package.type=fast-jar -DskipTests -B
+RUN mvn package -DskipTests -B
 
 # Stage 2: Create the final runtime image using a Red Hat UBI OpenJDK Runtime
 # UBI images provide a stable, secure, and supported base for your applications.
