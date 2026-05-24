@@ -1,0 +1,18 @@
+FROM node:20
+
+WORKDIR /app
+
+# Copiar manifiestos e instalar TODAS las dependencias
+# (dependencies + devDependencies juntas)
+COPY package*.json ./
+RUN npm install
+
+# Copiar el código fuente completo (incluyendo archivos .ts)
+COPY . .
+
+# Compilar TypeScript → JavaScript
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]

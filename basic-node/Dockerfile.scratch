@@ -1,0 +1,16 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+
+FROM scratch
+COPY --from=builder /usr/local/bin/node /node
+COPY --from=builder /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
+COPY --from=builder /usr/lib/libstdc++.so.6.0.34 /usr/lib/libstdc++.so.6.0.34
+COPY --from=builder /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6
+COPY --from=builder /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
+COPY --from=builder /app /app
+WORKDIR /app
+EXPOSE 3000
+CMD ["/node", "app.js"]

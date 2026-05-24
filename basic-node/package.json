@@ -1,0 +1,16 @@
+{
+  "name": "basic-node",
+  "version": "1.0.0",
+  "description": "Hello World Node.js Express app",
+  "main": "app.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "build": "node generate-static.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
