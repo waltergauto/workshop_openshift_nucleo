@@ -1,0 +1,24 @@
+# =============================================================
+#  DOCKERFILE BÁSICO — una sola etapa
+
+FROM eclipse-temurin:21
+
+# Instalar Maven desde los repositorios de Debian
+# Esto descarga Maven + sus dependencias transitivas
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends maven && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copiar el proyecto completo (fuentes incluidas)
+COPY pom.xml .
+COPY src ./src
+
+# Descargar dependencias y compilar
+RUN mvn package -DskipTests
+
+EXPOSE 8080
+
+# Arrancar la aplicación Quarkus (fast-jar)
+CMD ["java", "-jar", "target/quarkus-app/quarkus-run.jar"]

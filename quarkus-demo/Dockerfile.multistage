@@ -1,0 +1,79 @@
+# =============================================================
+#  DOCKERFILE MULTI-STAGE
+#
+#  Stage 1 (builder): compila la aplicación con Maven + JDK 21
+#  Stage 2 (runtime): solo JRE mínimo + el artefacto Quarkus
+#
+#  Lo que queda FUERA de la imagen final:
+#   - Maven y todo su repositorio .m2 (~380 MB)
+#   - JDK (compilador javac, jlink, jshell…)  descartado → solo JRE
+#   - Código fuente .java
+#   - Clases intermedias en target/
+#   - Reports de tests
+#   - Debian completo → reemplazado por Alpine
+# =============================================================
+
+
+# ── Stage 1: builder ─────────────────────────────────────────
+# Imagen oficial de Maven con JDK 21 — todo lo necesario para compilar
+FROM maven:3.9-eclipse-temurin-21 AS builder
+
+WORKDIR /app
+
+# Truco de cache: copiar solo pom.xml primero.
+# Si el código fuente cambia pero pom.xml no, Docker reutiliza
+# esta capa y no vuelve a descargar las dependencias.
+COPY pom.xml .
+RUN mvn dependency:go-offline -q
+
+# Ahora sí copiar las fuentes y compilar
+COPY src ./src
+RUN mvn package -DskipTests -q
+
+# Resultado: target/quarkus-app/
+#   ├── quarkus-run.jar   (bootstrap principal, ~15 KB)
+#   ├── lib/              (dependencias runtime, ~22 MB)
+#   ├── app/              (código de la app compilado)
+#   └── quarkus/          (framework Quarkus)
+
+
+# ── Stage 2: runtime ─────────────────────────────────────────
+# Solo JRE (sin compilador) sobre Alpine (~5 MB de OS)
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Usuario no-root — buena práctica de seguridad en producción
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+# Copiar ÚNICAMENTE el artefacto Quarkus del stage anterior
+# Maven, .m2, src/, target/classes → descartados automáticamente
+COPY --from=builder --chown=appuser:appgroup \
+     /app/target/quarkus-app/lib/       ./lib/
+COPY --from=builder --chown=appuser:appgroup \
+     /app/target/quarkus-app/*.jar      ./
+COPY --from=builder --chown=appuser:appgroup \
+     /app/target/quarkus-app/app/       ./app/
+COPY --from=builder --chown=appuser:appgroup \
+     /app/target/quarkus-app/quarkus/   ./quarkus/
+
+EXPOSE 8080
+
+# Opciones JVM recomendadas para contenedores:
+#   -XX:+UseContainerSupport  → detecta los límites de CPU/RAM del contenedor
+#   -XX:MaxRAMPercentage=75   → usa hasta el 75% de la RAM asignada al pod
+CMD ["java", \
+     "-XX:+UseContainerSupport", \
+     "-XX:MaxRAMPercentage=75.0", \
+     "-jar", "quarkus-run.jar"]
+
+# -------------------------------------------------------------
+#  Capas en la imagen final:
+#
+#   eclipse-temurin:21-jre-alpine        ~215 MB
+#   quarkus-app/lib/  (runtime deps)     ~ 22 MB
+#   quarkus-app/app/ + quarkus/ + jar    ~  5 MB
+#                                       ──────────
+#   TOTAL                               ~242 MB
+# -------------------------------------------------------------
