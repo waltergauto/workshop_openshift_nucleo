@@ -1,0 +1,116 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# TempoStack
+#
+# Despliega el stack completo de Tempo:
+#   · Distributor     → recibe trazas desde el OTelCollector
+#   · Ingester        → escribe bloques en S3
+#   · Querier         → lee bloques para responder consultas
+#   · Query Frontend  → punto de entrada de la UI
+#   · Compactor       → compacta bloques viejos
+#   · Jaeger UI       → visualización (integrada en consola OCP)
+#
+# Prerrequisito: Secret "tempo-s3-credentials" debe existir
+# (creado por el Job 06-tempo-s3-secret-job.yaml).
+# ─────────────────────────────────────────────────────────────────
+apiVersion: tempo.grafana.com/v1alpha1
+kind: TempoStack
+metadata:
+  name: workshop
+  namespace: openshift-opentelemetry-operator
+spec:
+
+  # ── Almacenamiento ──────────────────────────────────────────────
+  storage:
+    secret:
+      name: tempo-s3-credentials
+      type: s3
+    tls:
+      enabled: true   # ODF RGW/NooBaa sin TLS interno por defecto
+      caName: odf-ca-bundle    # nombre del ConfigMap que utiliza el certificado de ODF
+
+
+  # ── Tamaño del stack (perfil mínimo para workshop) ─────────────
+  storageSize: 10Gi    # PVC para WAL local del ingester
+
+  # ── Límites de retención ────────────────────────────────────────
+  retention:
+    global:
+      traces: 48h      # trazas disponibles 48 h (suficiente para el workshop)
+
+  # ── Componentes y recursos ──────────────────────────────────────
+  template:
+    distributor:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
+    ingester:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    querier:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
+    queryFrontend:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      # Jaeger UI integrada — el operador crea la Route automáticamente
+      jaegerQuery:
+        enabled: true
+        ingress:
+          type: route        # Route OCP con TLS edge
+          annotations:
+            haproxy.router.openshift.io/timeout: 120s
+
+    compactor:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
+  # ── Límites de búsqueda ─────────────────────────────────────────
+  limits:
+    global:
+      query:
+        #maxSearchBytesPerTrace: 0    # sin límite
+      ingestion:
+        ingestionBurstSizeBytes: 20000000    # 20 MB burst
+        ingestionRateLimitBytes: 15000000    # 15 MB/s steady
+        maxBytesPerTrace: 5000000            # 5 MB max por traza
+        maxTracesPerUser: 0                  # sin límite
+
+  # ── Integración con la consola de OpenShift ─────────────────────
+  # El operador Tempo en OCP 4.14+ puede registrar el backend de
+  # Jaeger UI como datasource en la consola. Requiere el plugin
+  # "monitoring-plugin" activo (viene por defecto en OCP 4.20).
+  observability:
+    tracing:
+      jaeger_agent_endpoint: ""   # no usamos agent, usamos OTLP directo

@@ -1,0 +1,128 @@
+# ============================================================
+#  BuildConfigs — tienda-api Quarkus (v1, v2, v3)
+#  OpenShift 4.18 — Estrategia Docker (multi-stage)
+#  AJUSTAR: spec.source.git.uri con tu repositorio real
+# ============================================================
+
+# ── ImageStream ──────────────────────────────────────────────────────────────
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: tienda-api
+  labels:
+    app: tienda-api
+spec:
+  lookupPolicy:
+    local: true
+---
+# ── BuildConfig v1 ───────────────────────────────────────────────────────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v1
+  labels:
+    app: tienda-api
+    version: v1
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api-quarkus.git
+      ref: main
+    contextDir: v1
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.good
+      # Usar la imagen UBI9 OpenJDK 21 del catálogo de OCP como builder
+      from:
+        kind: ImageStreamTag
+        namespace: openshift
+        name: "java:openjdk-21-ubi8"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v1"
+  triggers:
+  - type: ConfigChange
+  - type: GitHub
+    github:
+      secret: tienda-webhook-secret
+---
+# ── BuildConfig v2 ───────────────────────────────────────────────────────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v2
+  labels:
+    app: tienda-api
+    version: v2
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api-quarkus.git
+      ref: main
+    contextDir: v2
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.good
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v2"
+  triggers:
+  - type: ConfigChange
+---
+# ── BuildConfig v3 ───────────────────────────────────────────────────────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+    version: v3
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api-quarkus.git
+      ref: main
+    contextDir: v3
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.good
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v3"
+  triggers:
+  - type: ConfigChange
+---
+# ── BuildConfig v3-bad (ejercicio SCC) ───────────────────────────────────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v3-bad
+  labels:
+    app: tienda-api
+    demo: scc-bad
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api-quarkus.git
+      ref: main
+    contextDir: v3
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.bad
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v3-bad"
+  triggers:
+  - type: ConfigChange

@@ -1,0 +1,51 @@
+# ============================================================
+#  Módulo: Logging de Aplicaciones en OpenShift 4.18
+#  Requiere: Logging Operator (Red Hat OpenShift Logging)
+# ============================================================
+
+# ------------------------------------------------------------
+# PARTE 1 — Verificar que el Logging Operator está disponible
+# ------------------------------------------------------------
+# oc get csv -n openshift-logging | grep logging
+# oc get pods -n openshift-logging
+
+
+# ============================================================
+#  ClusterLogForwarder — capturar logs de tienda-api
+#  y separarlos por stream (stdout vs stderr)
+# ============================================================
+apiVersion: logging.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: tienda-api-forwarder
+  namespace: openshift-logging
+spec:
+  inputs:
+  # Input filtrado: solo pods de tienda-api en el namespace del workshop
+  - name: tienda-api-logs
+    type: application
+    application:
+      namespaces:
+      - tienda-api-workshop
+      selector:
+        matchLabels:
+          app: tienda-api
+
+  pipelines:
+  # Pipeline para logs de aplicación (stdout → INFO/WARNING)
+  - name: app-logs-pipeline
+    inputRefs:
+    - tienda-api-logs
+    outputRefs:
+    - default          # Loki/Elasticsearch interno de OCP
+    parse: json        # ← parsear el JSON que emite nuestra app
+
+  outputs:
+  - name: default
+    type: loki         # o "elasticsearch" según lo que tenga el cluster
+
+
+# ============================================================
+#  NOTA: Si el cluster NO tiene Logging Operator instalado,
+#  usar directamente "oc logs" con las técnicas del runbook.
+# ============================================================

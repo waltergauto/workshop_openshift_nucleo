@@ -1,0 +1,105 @@
+# ============================================================
+#  Deployment BLUE (v1) — versión estable
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+    version: v3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: v3
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: v3
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: tienda-api
+        image: quay-registry-quay-openshift-operators.apps.cluster-rrq7m.dynamic.redhatworkshops.io/developer/tienda-api:v3
+        ports:
+        - containerPort: 8080
+        env:
+        - name: JAVA_OPTS
+          value: "-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+# ============================================================
+#  Service
+# ============================================================
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+    version: v3
+spec:
+  selector:
+    app: tienda-api
+    version: v3
+  ports:
+  - port: 8080
+    targetPort: 8080
+# ============================================================
+#  Route
+# ============================================================
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+spec:
+  to:
+    kind: Service
+    name: tienda-api-v3
+    weight: 100
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

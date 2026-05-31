@@ -1,0 +1,127 @@
+---
+# ─── Secret con credenciales ──────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-secret
+  namespace: tienda-otel
+type: Opaque
+stringData:
+  POSTGRESQL_USER: workshop
+  POSTGRESQL_PASSWORD: workshop123
+  POSTGRESQL_DATABASE: tienda
+
+---
+# ─── PersistentVolumeClaim ────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-pvc
+  namespace: tienda-otel
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  # Ajustar al StorageClass disponible en el clúster.
+  # Si usás NFS como fallback del workshop anterior, descomentá:
+  # storageClassName: nfs-storage
+
+---
+# ─── Deployment ───────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: tienda-otel
+  labels:
+    app: postgresql
+    app.kubernetes.io/part-of: tienda-otel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          # Alternativa sin autenticación en registry:
+          # image: docker.io/library/postgres:16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgresql-secret
+          env:
+            # Script de inicialización: crea los schemas al arrancar
+            - name: POSTGRESQL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRESQL_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "workshop", "-d", "tienda"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "workshop", "-d", "tienda"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgresql-pvc
+        - name: init-scripts
+          configMap:
+            name: postgresql-init
+
+---
+# ─── ConfigMap con script de inicialización ───────────────────────
+# Crea los schemas necesarios para los tres microservicios.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-init
+  namespace: tienda-otel
+data:
+  01-schemas.sql: |
+    CREATE SCHEMA IF NOT EXISTS productos;
+    CREATE SCHEMA IF NOT EXISTS pedidos;
+    CREATE SCHEMA IF NOT EXISTS notificaciones;
+    GRANT ALL ON SCHEMA productos     TO workshop;
+    GRANT ALL ON SCHEMA pedidos       TO workshop;
+    GRANT ALL ON SCHEMA notificaciones TO workshop;
+
+---
+# ─── Service ─────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: tienda-otel
+spec:
+  selector:
+    app: postgresql
+  ports:
+    - port: 5432
+      targetPort: 5432

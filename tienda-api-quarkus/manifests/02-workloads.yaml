@@ -1,0 +1,250 @@
+# ============================================================
+#  Deployment BLUE (v1) — versión estable
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-blue
+  labels:
+    app: tienda-api
+    version: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: blue
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: tienda-api
+        image: quay-registry-quay-openshift-operators.apps.cluster-rrq7m.dynamic.redhatworkshops.io/developer/tienda-api:v1
+        ports:
+        - containerPort: 8080
+        env:
+        - name: JAVA_OPTS
+          value: "-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+# ============================================================
+#  Deployment GREEN (v2/v3) — canary → producción
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-green
+  labels:
+    app: tienda-api
+    version: green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: green
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: green
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: tienda-api
+        image: tienda-api:v3   # cambiar a v2 o v3 según el módulo
+        ports:
+        - containerPort: 8080
+        env:
+        - name: JAVA_OPTS
+          value: "-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+# ============================================================
+#  Services
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: tienda-api-blue
+  labels:
+    app: tienda-api
+    version: blue
+spec:
+  selector:
+    app: tienda-api
+    version: blue
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tienda-api-green
+  labels:
+    app: tienda-api
+    version: green
+spec:
+  selector:
+    app: tienda-api
+    version: green
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+# ============================================================
+#  Route — traffic split blue/green
+# ============================================================
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tienda-api
+  labels:
+    app: tienda-api
+  annotations:
+    haproxy.router.openshift.io/balance: roundrobin
+spec:
+  to:
+    kind: Service
+    name: tienda-api-blue
+    weight: 100
+  alternateBackends:
+  - kind: Service
+    name: tienda-api-green
+    weight: 0
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# ============================================================
+#  HPA — escala según CPU
+#  Nota: Quarkus/JVM consume más memoria que Python en arranque
+#        por eso requests.cpu es 200m (no 100m como en Python)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tienda-api-hpa
+  labels:
+    app: tienda-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tienda-api-blue
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+---
+# ============================================================
+#  PDB
+# ============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tienda-api-pdb
+  labels:
+    app: tienda-api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: tienda-api

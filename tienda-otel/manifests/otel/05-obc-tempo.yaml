@@ -1,0 +1,24 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# ObjectBucketClaim
+# Solicita un bucket S3 al operador ODF (RADOS Object Gateway).
+# ODF crea automáticamente:
+#   · ConfigMap  "tempo-s3-bucket"  → con BUCKET_HOST, BUCKET_NAME, BUCKET_PORT
+#   · Secret     "tempo-s3-bucket"  → con AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#
+# Tempo los consumirá a través del Secret "tempo-s3-credentials"
+# que construimos en 06-tempo-s3-secret.yaml usando esos valores.
+# ─────────────────────────────────────────────────────────────────
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: tempo-s3-bucket
+  # Tempo vive en este namespace; el bucket debe estar aquí también
+  # para que ODF genere el ConfigMap y el Secret en el mismo namespace.
+  namespace: openshift-opentelemetry-operator
+spec:
+  # StorageClass del ODF RGW. Nombre habitual en ODF 4.x:
+  storageClassName: openshift-storage.noobaa.io
+  # Si preferís usar el RGW directo (sin NooBaa) descomentá:
+  # storageClassName: ocs-storagecluster-ceph-rgw
+  generateBucketName: tempo-traces

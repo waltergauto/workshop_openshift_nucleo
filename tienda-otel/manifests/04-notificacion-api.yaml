@@ -1,0 +1,118 @@
+#---
+## ─── ImageStream ──────────────────────────────────────────────────
+#apiVersion: image.openshift.io/v1
+#kind: ImageStream
+#metadata:
+#  name: notificacion-api
+#  namespace: tienda-otel
+#  labels:
+#    app: notificacion-api
+#    app.kubernetes.io/part-of: tienda-otel
+#
+#---
+## ─── BuildConfig ─────────────────────────────────────────────────
+#apiVersion: build.openshift.io/v1
+#kind: BuildConfig
+#metadata:
+#  name: notificacion-api
+#  namespace: tienda-otel
+#  labels:
+#    app: notificacion-api
+#    app.kubernetes.io/part-of: tienda-otel
+#spec:
+#  source:
+#    type: Binary
+#  strategy:
+#    type: Docker
+#    dockerStrategy:
+#      dockerfilePath: Dockerfile
+#  output:
+#    to:
+#      kind: ImageStreamTag
+#      name: notificacion-api:latest
+#  triggers:
+#    - type: ConfigChange
+
+---
+# ─── Deployment ───────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notificacion-api
+  namespace: tienda-otel
+  labels:
+    app: notificacion-api
+    app.kubernetes.io/part-of: tienda-otel
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"postgresql"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notificacion-api
+  template:
+    metadata:
+      labels:
+        app: notificacion-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/q/metrics"
+        prometheus.io/port:   "8080"
+    spec:
+      containers:
+        - name: notificacion-api
+          image: quay-registry-quay-quay.apps.cluster-kc4hf.dynamic.redhatworkshops.io/developer/notificacion:v1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: tienda
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRESQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRESQL_PASSWORD
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4317
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+# ─── Service ─────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificacion-api
+  namespace: tienda-otel
+spec:
+  selector:
+    app: notificacion-api
+  ports:
+    - port: 8080
+      targetPort: 8080

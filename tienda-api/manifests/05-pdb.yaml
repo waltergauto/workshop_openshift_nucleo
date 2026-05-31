@@ -1,0 +1,30 @@
+# =============================================================
+# 05 - PodDisruptionBudget
+#      Garantiza que siempre haya al menos 1 pod disponible
+#      durante drenado de nodos o actualizaciones del clúster.
+#
+#      Aplica a TODOS los pods de tienda-api (blue + green)
+#      via el label app=tienda-api
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tienda-api-pdb
+  labels:
+    app: tienda-api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: tienda-api
+
+# -------------------------------------------------------------
+# EJERCICIO DE BLOQUEO (para el workshop):
+#
+# 1. Bajar replicas a 2 y cambiar a:  minAvailable: 2
+# 2. Intentar drenar el nodo donde vive uno de los pods:
+#      oc adm drain <nodo> --pod-selector=app=tienda-api --ignore-daemonsets
+# 3. Observar que queda bloqueado (Cannot evict pod...)
+# 4. Solución A: subir replicas a 3
+#    Solución B: volver a maxUnavailable: 1
+# -------------------------------------------------------------

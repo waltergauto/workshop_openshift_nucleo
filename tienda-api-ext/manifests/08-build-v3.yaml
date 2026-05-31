@@ -1,0 +1,71 @@
+# ============================================================
+#  BuildConfig v3 — imagen OCP-ready (rootless)
+#  Usa Dockerfile.good en lugar de S2I puro para mostrar
+#  el contraste con Dockerfile.bad en el ejercicio de SCC
+# ============================================================
+
+# ── ImageStream (si no existe del módulo anterior) ────────────────────────
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: tienda-api
+  labels:
+    app: tienda-api
+spec:
+  lookupPolicy:
+    local: true
+---
+# ── Build v3 "bueno" — Dockerfile OCP-ready ──────────────────────────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+    version: v3
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api.git
+      ref: main
+    contextDir: v3
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.good    # ← Dockerfile OCP-ready
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v3"
+  triggers:
+  - type: ConfigChange
+  - type: GitHub
+    github:
+      secret: tienda-api-webhook-secret
+---
+# ── Build v3 "malo" — para el ejercicio de demostración de SCC ───────────
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v3-bad
+  labels:
+    app: tienda-api
+    demo: scc-bad
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api.git
+      ref: main
+    contextDir: v3
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.bad     # ← Dockerfile problemático (root)
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v3-bad"
+  triggers:
+  - type: ConfigChange

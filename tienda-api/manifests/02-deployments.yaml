@@ -1,0 +1,105 @@
+# =============================================================
+# 02 - Deployment BLUE  (tienda-api:v1) — versión estable
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-blue
+  labels:
+    app: tienda-api
+    version: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: blue
+    spec:
+      containers:
+      - name: tienda-api
+        image: tienda-api:v1
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 3
+        env:
+        - name: PORT
+          value: "8080"
+---
+# =============================================================
+# 03 - Deployment CANARY / GREEN  (tienda-api:v2)
+#      Se usa primero como canary (1 réplica)
+#      Luego como green en el blue-green switch (2+ réplicas)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-green
+  labels:
+    app: tienda-api
+    version: green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: green
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: green
+    spec:
+      containers:
+      - name: tienda-api
+        image: tienda-api:v2
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 3
+        env:
+        - name: PORT
+          value: "8080"

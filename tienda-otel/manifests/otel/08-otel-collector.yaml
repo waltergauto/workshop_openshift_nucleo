@@ -1,0 +1,146 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# OpenTelemetryCollector — tienda-otel
+#
+# Modo: Deployment (una instancia centralizada, ideal para workshop)
+#
+# Pipeline de trazas:
+#   otlp (gRPC/HTTP) → batch → [debug + otlphttp → Tempo]
+#
+# El collector vive en openshift-opentelemetry-operator y recibe
+# trazas desde las apps en el namespace tienda-otel a través de
+# un Service accesible cross-namespace.
+#
+# Prerrequisito: TempoStack "workshop" debe estar Running
+# (creado por 07-tempostack.yaml).
+# ─────────────────────────────────────────────────────────────────
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel
+  namespace: openshift-opentelemetry-operator
+  labels:
+    app.kubernetes.io/part-of: tienda-otel
+spec:
+
+  # ── Modo de despliegue ─────────────────────────────────────────
+  # "deployment" = pod(s) fijos. Adecuado para workshop centralizado.
+  # Alternativa para producción: "daemonset" (un pod por nodo).
+  mode: deployment
+  replicas: 1
+
+  managementState: managed
+  ipFamilyPolicy: SingleStack
+  configVersions: 3
+
+  # ── Recursos del pod del collector ────────────────────────────
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # ── Configuración del collector (formato OTEL Collector v0.9x) ─
+  config:
+
+    # ── Receptores ──────────────────────────────────────────────
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            # Puerto estándar OTLP/gRPC
+            # Las apps configuran: OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+            endpoint: "0.0.0.0:4317"
+          http:
+            # Puerto estándar OTLP/HTTP (útil para debug con curl)
+            endpoint: "0.0.0.0:4318"
+
+    # ── Procesadores ────────────────────────────────────────────
+    processors:
+      # batch: agrupa spans antes de exportar — reduce llamadas al backend
+      batch:
+        timeout: 5s
+        send_batch_size: 512
+        send_batch_max_size: 1024
+
+      # memory_limiter: protege el collector de OOM
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+
+      # resource: añade atributos globales a todas las trazas
+      resource:
+        attributes:
+          - key: cluster.name
+            value: "workshop-ocp420"
+            action: upsert
+          - key: workshop
+            value: "tienda-otel"
+            action: upsert
+
+    # ── Exportadores ────────────────────────────────────────────
+    exporters:
+      # debug: imprime trazas en los logs del collector
+      # Muy útil durante el workshop para ver los spans en tiempo real:
+      #   oc logs -f deployment/otel-collector -n openshift-opentelemetry-operator
+      debug:
+        verbosity: detailed    # opciones: basic | normal | detailed
+
+      # otlphttp: envía trazas al Distributor de Tempo
+      # El TempoStack "workshop" expone el endpoint OTLP en:
+      #   http://tempo-workshop-distributor.<namespace>.svc:4318
+      otlphttp:
+        endpoint: "http://tempo-workshop-distributor.openshift-opentelemetry-operator.svc:4318"
+        tls:
+          insecure: true       # sin TLS interno en el workshop
+        headers:
+          X-Scope-OrgID: "tienda-otel"   # tenant ID requerido por Tempo
+
+    # ── Pipeline ────────────────────────────────────────────────
+    service:
+      # Telemetría interna del propio collector (métricas y logs)
+      telemetry:
+        logs:
+          level: "info"
+        metrics:
+          level: "detailed"
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: "0.0.0.0"
+                    port: 8888
+
+      pipelines:
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter   # siempre primero
+            - resource
+            - batch            # siempre último antes de exportar
+          exporters:
+            - debug
+            - otlphttp
+
+  # ── targetAllocator ────────────────────────────────────────────
+  # Solo necesario si el collector va a hacer scraping de métricas
+  # Prometheus (modo prometheus_receiver). Para el workshop de trazas
+  # no es necesario, pero lo dejamos con la configuración mínima
+  # por coherencia con el YAML de referencia.
+  #
+  # NOTA: si no necesitás scraping de métricas, podés eliminar
+  # toda la sección targetAllocator sin problema.
+  targetAllocator:
+    enabled: false   # desactivado: no hacemos scraping con el collector
+    # Si en el futuro querés activarlo:
+    # enabled: true
+    # allocationStrategy: consistent-hashing
+    # filterStrategy: relabel-config
+    # prometheusCR:
+    #   scrapeInterval: 30s
+    # collectorNotReadyGracePeriod: 30s
+    # collectorTargetReloadInterval: 30s

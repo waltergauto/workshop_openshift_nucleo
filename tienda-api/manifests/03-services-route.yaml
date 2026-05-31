@@ -1,0 +1,67 @@
+# =============================================================
+# 03 - Service para BLUE (v1)
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: tienda-api-blue
+  labels:
+    app: tienda-api
+    version: blue
+spec:
+  selector:
+    app: tienda-api
+    version: blue
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+---
+# =============================================================
+# 04 - Service para GREEN (v2 / canary)
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: tienda-api-green
+  labels:
+    app: tienda-api
+    version: green
+spec:
+  selector:
+    app: tienda-api
+    version: green
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+---
+# =============================================================
+# 05 - Route principal
+#      Inicia con 100% blue.
+#      Durante canary: blue=90 green=10  (ver ejercicio)
+#      Durante blue-green switch: blue=0  green=100
+# =============================================================
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tienda-api
+  labels:
+    app: tienda-api
+  annotations:
+    haproxy.router.openshift.io/balance: roundrobin
+spec:
+  to:
+    kind: Service
+    name: tienda-api-blue
+    weight: 100
+  alternateBackends:
+  - kind: Service
+    name: tienda-api-green
+    weight: 0
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

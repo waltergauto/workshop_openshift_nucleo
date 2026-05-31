@@ -1,0 +1,51 @@
+# ============================================================
+#  EJEMPLO B — Imagen OCP-ready / rootless
+#  Funciona con SCC restricted-v2 y UID arbitrario
+# ============================================================
+
+# ✅ Imagen base UBI9 (Universal Base Image) — certificada Red Hat
+FROM registry.access.redhat.com/ubi9/python-311:latest
+
+# ── Metadatos (buena práctica) ───────────────────────────────────────────────
+LABEL maintainer="workshop@empresa.com" \
+      version="v3" \
+      description="TiendaAPI — OCP ready, rootless"
+
+# ── Variables de entorno ─────────────────────────────────────────────────────
+ENV PORT=8080 \
+    APP_VERSION=v3 \
+    APP_NAME=tienda-api \
+    LOG_LEVEL=INFO \
+    # Evita que Python bufferee stdout/stderr (crítico para logs en OCP)
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /opt/app-root/src
+
+# ── Dependencias ─────────────────────────────────────────────────────────────
+COPY requirements.txt .
+
+# ✅ pip sin cache, como usuario no-root que ya viene en la imagen UBI
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Código fuente ─────────────────────────────────────────────────────────────
+COPY . .
+
+# ✅ Permisos para UID arbitrario:
+#    El grupo 0 (root group) tiene lectura en /opt/app-root
+#    OpenShift asigna un UID aleatorio del rango del namespace,
+#    pero siempre con GID=0. chmod g= resuelve eso.
+RUN chown -R 1001:0 /opt/app-root && \
+    chmod -R g=u    /opt/app-root
+
+# ✅ Puerto no privilegiado (>= 1024)
+EXPOSE 8080
+
+# ✅ Usuario no-root explícito
+#    1001 es el UID por defecto de las imágenes UBI/S2I de Red Hat.
+#    OpenShift puede sobreescribirlo con un UID aleatorio del rango
+#    del namespace (eso está bien — el chmod g=u de arriba lo permite).
+USER 1001
+
+# ✅ Usar Gunicorn (no el servidor de desarrollo de Flask)
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

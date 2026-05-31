@@ -1,0 +1,22 @@
+# ============================================================
+#  Dockerfile.bad — NO listo para OpenShift
+#  Corre como root, puerto privilegiado, sin permisos de grupo
+#  → Fallará con SCC restricted-v2 de OCP 4.18
+# ============================================================
+FROM eclipse-temurin:21-jre
+
+# ❌ Corre como root (uid=0) — OpenShift lo rechaza con restricted-v2
+WORKDIR /app
+
+# Copiar el fast-jar generado por Quarkus
+COPY target/quarkus-app/lib/           /app/lib/
+COPY target/quarkus-app/*.jar          /app/
+COPY target/quarkus-app/app/           /app/app/
+COPY target/quarkus-app/quarkus/       /app/quarkus/
+
+# ❌ Sin USER → proceso corre como root
+# ❌ Sin chmod g=u → UID arbitrario de OCP no puede leer los archivos
+
+EXPOSE 8080
+
+CMD ["java", "-jar", "/app/quarkus-run.jar"]

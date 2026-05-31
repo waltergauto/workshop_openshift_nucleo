@@ -1,0 +1,182 @@
+# ============================================================
+#  Módulo: SCC + Contenedores Rootless
+#  OpenShift 4.18 — Workshop de Desarrollo
+# ============================================================
+
+# ------------------------------------------------------------
+# PARTE 1: Ver qué SCC está usando un pod
+# ------------------------------------------------------------
+# oc get pod <pod-name> -o jsonpath='{.metadata.annotations.openshift\.io/scc}'
+
+
+# ============================================================
+#  MANIFEST 1 — Deployment SIN securityContext
+#  Resultado: OCP asigna SCC "restricted-v2" automáticamente.
+#  Si la imagen corre como root → CrashLoopBackOff
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-nosec
+  labels:
+    app: tienda-api
+    demo: scc-bad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tienda-api
+      demo: scc-bad
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        demo: scc-bad
+    spec:
+      containers:
+      - name: tienda-api
+        # Usar Dockerfile.bad para reproducir el error en el workshop
+        image: tienda-api:v3-bad
+        ports:
+        - containerPort: 80
+        # Sin securityContext → OCP aplica restricted-v2:
+        #   runAsNonRoot: true
+        #   allowPrivilegeEscalation: false
+        # → La imagen que corre como root FALLA aquí
+---
+# ============================================================
+#  MANIFEST 2 — Deployment OCP-ready con securityContext correcto
+#  Funciona con SCC "restricted-v2" (el más restrictivo de OCP 4.x)
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tienda-api-v3
+  labels:
+    app: tienda-api
+    version: v3
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tienda-api
+      version: v3
+  template:
+    metadata:
+      labels:
+        app: tienda-api
+        version: v3
+    spec:
+      # ✅ No declarar runAsUser con UID fijo:
+      #    OpenShift asignará uno del rango del namespace automáticamente.
+      #    La imagen debe estar preparada para eso (chmod g=u).
+      securityContext:
+        runAsNonRoot: true          # OCP rechaza root explícitamente
+        seccompProfile:
+          type: RuntimeDefault      # perfil seccomp por defecto (OCP 4.11+)
+
+      containers:
+      - name: tienda-api
+        image: tienda-api:v3
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: APP_VERSION
+          value: "v3"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        securityContext:
+          # ✅ No escalar privilegios bajo ninguna circunstancia
+          allowPrivilegeEscalation: false
+          # ✅ Filesystem de solo lectura excepto volúmenes explícitos
+          readOnlyRootFilesystem: true
+          # ✅ Eliminar todas las capabilities de Linux
+          capabilities:
+            drop:
+            - ALL
+        # ✅ Montar /tmp como volumen en memoria (requerido por readOnlyRootFilesystem)
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+# ============================================================
+#  MANIFEST 3 — SCC personalizado para casos especiales
+#  Usar solo cuando restricted-v2 no alcanza (ej: apps legacy)
+#  Requiere permisos de cluster-admin para crear SCCs.
+# ============================================================
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: tienda-api-scc
+  annotations:
+    kubernetes.io/description: "SCC mínimo para tienda-api — solo para demo de workshop"
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowedCapabilities: []
+defaultAddCapabilities: []
+requiredDropCapabilities:
+- ALL
+fsGroup:
+  type: MustRunAs
+  ranges:
+  - min: 1000
+    max: 65535
+runAsUser:
+  # MustRunAsRange permite UID arbitrario dentro del rango del namespace
+  type: MustRunAsRange
+  uidRangeMin: 1000
+  uidRangeMax: 65535
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+volumes:
+- configMap
+- downwardAPI
+- emptyDir
+- persistentVolumeClaim
+- projected
+- secret
+users: []
+groups: []
+---
+# ============================================================
+#  MANIFEST 4 — ServiceAccount vinculado al SCC personalizado
+# ============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tienda-api-sa
+  labels:
+    app: tienda-api

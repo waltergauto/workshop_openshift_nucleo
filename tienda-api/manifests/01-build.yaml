@@ -1,0 +1,78 @@
+# =============================================================
+# 01 - ImageStreams
+# =============================================================
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: tienda-api
+  labels:
+    app: tienda-api
+spec:
+  lookupPolicy:
+    local: true
+---
+# =============================================================
+# 02 - BuildConfig v1  (rama: main o tag v1)
+# AJUSTAR: spec.source.git.uri con tu repositorio real
+# =============================================================
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v1
+  labels:
+    app: tienda-api
+    version: v1
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api.git
+      ref: main
+    contextDir: v1
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        namespace: openshift
+        name: "python:3.11-ubi9"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v1"
+  triggers:
+  - type: ConfigChange
+  - type: GitHub
+    github:
+      secret: tienda-api-webhook-secret
+---
+# =============================================================
+# 03 - BuildConfig v2  (rama: v2 o carpeta v2)
+# =============================================================
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: tienda-api-v2
+  labels:
+    app: tienda-api
+    version: v2
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/TU_ORG/tienda-api.git
+      ref: v2
+    contextDir: v2
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        namespace: openshift
+        name: "python:3.11-ubi9"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "tienda-api:v2"
+  triggers:
+  - type: ConfigChange

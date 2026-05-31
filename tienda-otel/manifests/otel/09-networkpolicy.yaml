@@ -1,0 +1,59 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# NetworkPolicy — permite que las apps en tienda-otel alcancen
+# el OTelCollector en openshift-opentelemetry-operator.
+#
+# OpenShift activa NetworkPolicy por defecto en los namespaces.
+# Sin esta política, el tráfico cross-namespace queda bloqueado.
+# ─────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-tienda-otel-ingress
+  namespace: openshift-opentelemetry-operator
+spec:
+  podSelector:
+    matchLabels:
+      # El operador pone esta label en el pod del collector
+      app.kubernetes.io/name: otel-collector
+  policyTypes:
+    - Ingress
+  ingress:
+    # Tráfico OTLP/gRPC (4317) y OTLP/HTTP (4318) desde tienda-otel
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tienda-otel
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+
+---
+# ─────────────────────────────────────────────────────────────────
+# NetworkPolicy — permite que el OTelCollector alcance el
+# Distributor de Tempo (ambos en el mismo namespace, pero
+# lo declaramos explícitamente por buenas prácticas).
+# ─────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-otel-to-tempo
+  namespace: openshift-opentelemetry-operator
+spec:
+  podSelector:
+    matchLabels:
+      # Label del pod Distributor generado por TempoStack "workshop"
+      app.kubernetes.io/component: distributor
+      app.kubernetes.io/instance:  workshop
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318

@@ -1,0 +1,172 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# Parche para los Deployments de las apps en tienda-otel
+#
+# El collector vive en openshift-opentelemetry-operator, por lo que
+# las apps necesitan el FQDN completo del Service cross-namespace:
+#
+#   otel-collector.<namespace>.svc.cluster.local
+#
+# Si ya aplicaste los manifests 02-04, usá este parche con:
+#   oc patch deployment producto-api    -n tienda-otel --patch-file 10-patch-apps-otel-endpoint.yaml
+#   oc patch deployment pedido-api      -n tienda-otel --patch-file 10-patch-apps-otel-endpoint.yaml
+#   oc patch deployment notificacion-api -n tienda-otel --patch-file 10-patch-apps-otel-endpoint.yaml
+#
+# O aplicar directamente con kubectl/oc patch:
+# ─────────────────────────────────────────────────────────────────
+
+# ─── Script de aplicación rápida ─────────────────────────────────
+# Pegar en la terminal:
+#
+# COLLECTOR_ENDPOINT="http://otel-collector.openshift-opentelemetry-operator.svc.cluster.local:4317"
+# for app in producto-api pedido-api notificacion-api; do
+#   oc set env deployment/$app \
+#     OTEL_EXPORTER_OTLP_ENDPOINT="$COLLECTOR_ENDPOINT" \
+#     -n tienda-otel
+# done
+#
+# ─────────────────────────────────────────────────────────────────
+# Lo siguiente es el patch YAML equivalente (para producto-api).
+# Repetir para pedido-api y notificacion-api cambiando el metadata.name.
+# ─────────────────────────────────────────────────────────────────
+
+# PATCH para producto-api
+# oc patch deployment producto-api -n tienda-otel --type=json -p='
+# [
+#   {
+#     "op": "replace",
+#     "path": "/spec/template/spec/containers/0/env",
+#     "value": [
+#       {"name": "DB_HOST",     "value": "postgresql"},
+#       {"name": "DB_PORT",     "value": "5432"},
+#       {"name": "DB_NAME",     "value": "tienda"},
+#       {"name": "DB_USER",     "valueFrom": {"secretKeyRef": {"name": "postgresql-secret", "key": "POSTGRES_USER"}}},
+#       {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "postgresql-secret", "key": "POSTGRES_PASSWORD"}}},
+#       {"name": "OTEL_EXPORTER_OTLP_ENDPOINT",
+#        "value": "http://otel-collector.openshift-opentelemetry-operator.svc.cluster.local:4317"}
+#     ]
+#   }
+# ]'
+#
+# ─────────────────────────────────────────────────────────────────
+# ALTERNATIVA RECOMENDADA: usar un ConfigMap compartido
+# ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: tienda-otel
+data:
+  # FQDN completo del Service generado por el OTelCollector
+  # Formato: <collector-name>-collector.<namespace>.svc.cluster.local
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-collector.openshift-opentelemetry-operator.svc.cluster.local:4317"
+
+---
+# ─────────────────────────────────────────────────────────────────
+# Parche Deployment — producto-api
+# Reemplaza la variable OTEL_EXPORTER_OTLP_ENDPOINT con el FQDN
+# ─────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producto-api
+  namespace: tienda-otel
+spec:
+  template:
+    spec:
+      containers:
+        - name: producto-api
+          env:
+            - name: DB_HOST
+              value: postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: tienda
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_PASSWORD
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pedido-api
+  namespace: tienda-otel
+spec:
+  template:
+    spec:
+      containers:
+        - name: pedido-api
+          env:
+            - name: DB_HOST
+              value: postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: tienda
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_PASSWORD
+            - name: PRODUCTO_API_URL
+              value: http://producto-api:8080
+            - name: NOTIFICACION_API_URL
+              value: http://notificacion-api:8080
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notificacion-api
+  namespace: tienda-otel
+spec:
+  template:
+    spec:
+      containers:
+        - name: notificacion-api
+          env:
+            - name: DB_HOST
+              value: postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: tienda
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_PASSWORD
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
