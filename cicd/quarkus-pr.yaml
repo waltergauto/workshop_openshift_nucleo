@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+  finalizers:
+  - results.tekton.dev/pipelinerun
+  - chains.tekton.dev/pipelinerun
+  name: quarkus-demo-pr
+  namespace: openshift-pipelines
+spec:
+  params:
+    - name: deployment-name
+      value: quarkus-demo
+    - name: environment
+      value: dev
+    - name: git-url
+      value: 'https://github.com/waltergauto/workshop_dev_nucleo.git'
+      default: 'https://github.com/waltergauto/workshop_dev_nucleo.git'
+    - name: git-sc-revision
+      value: main
+    - name: dockerfile
+      value: 'Dockerfile.multistage'
+    - name: image
+      value: 'quay-registry-quay-quay.apps.cluster-kc4hf.dynamic.redhatworkshops.io/developer/quarkus-demo'
+  pipelineRef:
+    name: java-21
+  taskRunTemplate:
+  #  podTemplate:
+  #    securityContext:
+  #      fsGroup: 1000780000
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 10m0s
+  workspaces:
+  - name: output
+    persistentVolumeClaim:
+      claimName: shared-workspace-pvc
+  #- name: maven-cache
+  #  persistentVolumeClaim:
+  #    claimName: maven-cache
+  - name: basic-auth
+    secret:
+      secretName: github-credentials
+  - name: dockerconfig
+    secret:
+      secretName: quay-robot-account-secret

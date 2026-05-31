@@ -1,0 +1,181 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: java-21
+  namespace: openshift-pipelines
+spec:
+  params:
+  - name: deployment-name
+    type: string
+    description: name of the deployment to be patched
+  - name: git-url
+    type: string
+    description: url of the git repo
+  - name: git-sc-revision
+    type: string
+    description: revision to be used from repo of the code
+  - name: image
+    type: string
+    description: image to be build from the code
+  - name: environment
+    type: string
+    description: Environment to be deployed resources
+  - name: dockerfile
+    type: string
+    description: dockerfile used to build images
+  tasks:
+  - name: fetch-sc-repository
+    params:
+    - name: SUBDIRECTORY
+      value: "app"
+    - name: DELETE_EXISTING
+      value: "false"
+    - name: VERBOSE
+      value: "false"
+    - name: SSL_VERIFY
+      value: "true"
+    - name: URL
+      value: $(params.git-url)
+    - name: REVISION
+      value: $(params.git-sc-revision)
+    - name: REFSPEC
+      value: ""
+    - name: SUBMODULES
+      value: "true"
+    - name: DEPTH
+      value: "1"
+    - name: SPARSE_CHECKOUT_DIRECTORIES
+      value: ""
+    taskRef:
+      kind: Task
+      name: git-clone
+    workspaces:
+#    - name: basic-auth
+#      workspace: basic-auth
+    - name: output
+      workspace: output
+ 
+  - name: maven-run
+    runAfter:
+    - fetch-sc-repository
+    taskRef:
+      name: maven-21
+    params:
+    - name: SUBDIRECTORY
+      value: "quarkus-demo"
+    - name: GOALS
+      value:
+      - clean
+      - package
+      - -DskipTests
+    workspaces:
+    - name: source
+      workspace: output
+      subPath: app
+    #- name: maven-cache
+    #  workspace: maven-cache
+
+  - name: debug-ls
+    runAfter:
+      - maven-run
+    taskSpec:
+      workspaces:
+        - name: source
+      steps:
+        - name: ls
+          image: registry.access.redhat.com/ubi9/ubi-minimal
+          script: |
+            echo "=== Buscando Dockerfile ==="
+            find /workspace/source -name "Dockerfile" -maxdepth 6
+            echo ""
+            echo "=== Estructura completa ==="
+            find /workspace/source -maxdepth 4 -type d
+    workspaces:
+      - name: source
+        workspace: output
+
+  - name: build-app-image
+    runAfter:
+      - maven-run
+      - fetch-sc-repository
+    taskRef:
+      kind: Task
+      name: buildah
+    workspaces:
+      - name: source
+        workspace: output
+        subPath: app/quarkus-demo
+      - name: dockerconfig
+        workspace: dockerconfig
+    params:
+      - name: IMAGE
+        value: $(params.image):$(tasks.fetch-sc-repository.results.COMMIT)_$(params.environment)
+      - name: DOCKERFILE
+        value: $(params.dockerfile)
+      - name: CONTEXT
+        value: .
+      - name: TLSVERIFY
+        value: "false"
+      - name: VERBOSE
+        value: true
+ 
+  - name: update-manifests
+    runAfter:
+      - build-app-image
+    taskRef:
+      kind: Task
+      name: git-cli
+    params:
+      - name: DELETE_EXISTING
+        value: "false"
+      - name: GIT_SCRIPT
+        value: |
+          #!/bin/bash
+          set -e
+ 
+          SERVICE_NAME=$(params.deployment-name)
+          echo "Service: ${SERVICE_NAME}"
+          ENVIRONMENT=$(params.environment)
+          echo "Environment: ${ENVIRONMENT}"
+          COMMIT=$(tasks.fetch-sc-repository.results.COMMIT)
+          echo "Commit: ${COMMIT}"
+          DATE=$(date +%Y-%m-%d-%H:%M:%S)
+          echo "Timestamp: ${DATE}"
+ 
+          git config --global credential.helper "store --file=/workspace/basic-auth/.git-credentials"
+          git config --global user.email "openshift@example.com"
+          git config --global user.name "OpenShift"
+ 
+          # Build manifests' path
+          #FILE="${SERVICE_NAME}/overlays/${ENVIRONMENT}/deployment.yaml"
+          FILE="openshift/deployment.yaml"
+          
+          echo "Updating manifests for service ${SERVICE_NAME} on ${ENVIRONMENT} with commit ${COMMIT}"
+ 
+          git checkout main
+          
+          # Apply `sed` to update image tag
+          sed -i "s|default-route-openshift-image-registry.apps.cluster-8tsrm.dynamic.redhatworkshops.io/kuard/${SERVICE_NAME}:[^[:space:]]*|default-route-openshift-image-registry.apps.cluster-8tsrm.dynamic.redhatworkshops.io/kuard/${SERVICE_NAME}:${COMMIT}_${ENVIRONMENT}|" "$FILE"
+ 
+          git add ${FILE}
+          echo "${FILE} added to staging area"
+ 
+          git commit -m "Update deployment.yaml for service: ${SERVICE_NAME} from Tekton"
+          echo "Commit changes"
+ 
+          git push
+    workspaces:
+      - name: basic-auth
+        workspace: basic-auth
+ 
+#  finally:
+#   - name: cleanup
+#     taskRef:
+#       name: cleanup-workspace
+#     workspaces:
+#       - name: workspace
+#         workspace: output
+  workspaces:
+  - name: output
+  - name: basic-auth
+  - name: dockerconfig

@@ -1,0 +1,19 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cleanup-workspace
+  namespace: openshift-pipelines
+spec:
+  workspaces:
+    - name: workspace
+  steps:
+    - name: cleanup
+      image: registry.access.redhat.com/ubi9/ubi-minimal
+      script: |
+        #!/usr/bin/env sh
+        set -e
+        echo "Cleaning workspace..."
+        rm -rf $(workspaces.workspace.path)/*
+        rm -rf $(workspaces.workspace.path)/.[!.]*
+        rm -rf $(workspaces.workspace.path)/..?*
+        echo "Workspace cleaned"
