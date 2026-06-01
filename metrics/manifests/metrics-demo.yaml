@@ -1,0 +1,255 @@
+---
+# =============================================================================
+# 01 — Namespace
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: metrics-app
+  labels:
+    # REQUERIDO: esta label habilita el scraping de User Workload Monitoring
+    # Sin ella, Prometheus no descubre los ServiceMonitors del namespace
+    openshift.io/cluster-monitoring: "true"
+
+---
+# =============================================================================
+# 02 — Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-demo
+  namespace: metrics-app
+  labels:
+    app: metrics-demo
+    app.kubernetes.io/part-of: metrics-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metrics-demo
+  template:
+    metadata:
+      labels:
+        app: metrics-demo
+    spec:
+      containers:
+        - name: metrics-demo
+          image: quay-registry-quay-quay.apps.cluster-kc4hf.dynamic.redhatworkshops.io/developer/metrics-demo:v1
+          ports:
+            - name: http
+              containerPort: 8080
+            # Puerto de métricas — el ServiceMonitor apunta a este nombre
+            - name: metrics
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# =============================================================================
+# 03 — Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-demo
+  namespace: metrics-app
+  labels:
+    app: metrics-demo
+  annotations:
+    # Prometheus operator usa estas anotaciones como alternativa al ServiceMonitor
+    # El ServiceMonitor es más explícito y recomendado — ambos se incluyen
+    prometheus.io/scrape: "true"
+    prometheus.io/path:   "/q/metrics"
+    prometheus.io/port:   "8080"
+spec:
+  selector:
+    app: metrics-demo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+
+---
+# =============================================================================
+# 04 — Route
+# =============================================================================
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: metrics-demo
+  namespace: metrics-app
+spec:
+  to:
+    kind: Service
+    name: metrics-demo
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# =============================================================================
+# 05 — ServiceMonitor
+# =============================================================================
+# Le dice a Prometheus (User Workload) cómo y cada cuánto scrape la app.
+# El operador de monitoring de OCP descubre este recurso automáticamente
+# porque el namespace tiene la label openshift.io/cluster-monitoring: "true"
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: metrics-demo
+  namespace: metrics-app
+  labels:
+    app: metrics-demo
+spec:
+  selector:
+    matchLabels:
+      app: metrics-demo        # debe coincidir con los labels del Service
+  endpoints:
+    - port: http               # nombre del puerto en el Service
+      path: /q/metrics         # ruta del endpoint Prometheus de Quarkus
+      interval: 30s            # frecuencia de scrape
+      scheme: http
+
+---
+# =============================================================================
+# 06 — PrometheusRule
+# =============================================================================
+# Define alertas que Prometheus evalúa continuamente.
+# Cuando se cumplen las condiciones, envía la alerta a Alertmanager.
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: metrics-demo-alerts
+  namespace: metrics-app
+  labels:
+    app: metrics-demo
+spec:
+  groups:
+
+    # ── Grupo 1: Disponibilidad ──────────────────────────────────────────────
+    - name: metrics-demo.disponibilidad
+      interval: 30s
+      rules:
+
+        # Alerta: la app no está respondiendo
+        - alert: MetricsDemoDown
+          expr: |
+            absent(up{job="metrics-demo", namespace="metrics-app"} == 1)
+          for: 1m
+          labels:
+            severity: critical
+            namespace: metrics-app
+          annotations:
+            summary: "metrics-demo no está disponible"
+            description: "El pod metrics-demo lleva más de 1 minuto sin responder al scrape de Prometheus."
+            runbook: "Verificar con: oc get pods -n metrics-app"
+
+    # ── Grupo 2: Errores HTTP ────────────────────────────────────────────────
+    - name: metrics-demo.errores
+      interval: 30s
+      rules:
+
+        # Alerta: tasa de errores 5xx supera el 10% en los últimos 5 minutos
+        - alert: MetricsDemoAltaTasaErrores
+          expr: |
+            sum(rate(http_server_requests_seconds_count{
+              namespace="metrics-app",
+              status=~"5.."
+            }[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{
+              namespace="metrics-app"
+            }[5m]))
+            > 0.10
+          for: 2m
+          labels:
+            severity: warning
+            namespace: metrics-app
+          annotations:
+            summary: "Alta tasa de errores HTTP en metrics-demo"
+            description: "Más del 10% de las peticiones están fallando (5xx) en los últimos 5 minutos."
+            runbook: "Revisar logs: oc logs -f deployment/metrics-demo -n metrics-app"
+
+        # Alerta: contador de errores custom superó 5 en los últimos 5 minutos
+        - alert: MetricsDemoErroresCustom
+          expr: |
+            increase(workshop_errores_http_total{
+              namespace="metrics-app"
+            }[5m]) > 5
+          for: 1m
+          labels:
+            severity: warning
+            namespace: metrics-app
+          annotations:
+            summary: "Errores custom detectados en metrics-demo"
+            description: "Se registraron más de 5 errores en el contador workshop_errores_http_total en 5 minutos."
+
+    # ── Grupo 3: Rendimiento ─────────────────────────────────────────────────
+    - name: metrics-demo.rendimiento
+      interval: 30s
+      rules:
+
+        # Alerta: latencia p95 supera 1 segundo
+        - alert: MetricsDemoAltaLatencia
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_server_requests_seconds_bucket{
+                namespace="metrics-app"
+              }[5m])) by (le)
+            ) > 1.0
+          for: 2m
+          labels:
+            severity: warning
+            namespace: metrics-app
+          annotations:
+            summary: "Alta latencia en metrics-demo"
+            description: "El percentil 95 de latencia HTTP supera 1 segundo."
+
+    # ── Grupo 4: JVM ─────────────────────────────────────────────────────────
+    - name: metrics-demo.jvm
+      interval: 60s
+      rules:
+
+        # Alerta: uso de heap supera el 80%
+        - alert: MetricsDemoHeapAlto
+          expr: |
+            (
+              jvm_memory_used_bytes{
+                namespace="metrics-app",
+                area="heap"
+              }
+              /
+              jvm_memory_max_bytes{
+                namespace="metrics-app",
+                area="heap"
+              }
+            ) > 0.80
+          for: 5m
+          labels:
+            severity: warning
+            namespace: metrics-app
+          annotations:
+            summary: "Uso de heap JVM alto en metrics-demo"
+            description: "El heap de la JVM supera el 80% de su máximo durante más de 5 minutos."
